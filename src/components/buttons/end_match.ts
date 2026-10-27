@@ -22,7 +22,7 @@ export async function execute(interaction: ButtonInteraction) {
 
     const footerText = originalEmbed.footer?.text || '';
     const tsMatch = footerText.match(/ts:(\d+)/);
-    // Forçando 24 horas atrás para o teste de resgate da partida
+    // 24 horas atrás (86400s) para garantir que pega a partida que você jogou
     const startTimeEpoch = tsMatch ? parseInt(tsMatch[1], 10) : Math.floor(Date.now() / 1000) - 86400; 
 
     const playersField = originalEmbed.fields.find(f => f.name.includes('Jogadores'));
@@ -50,7 +50,7 @@ export async function execute(interaction: ButtonInteraction) {
       matchCount = matchIds.length;
     } else if (gameName === 'Valorant') {
       allMatchesData = await getValorantMatchesSince(capitaoDB.riot_id, startTimeEpoch);
-      if (allMatchesData.length === 0) throw new Error('Nenhuma partida de Valorant encontrada (Pode demorar 2 min para atualizar na API).');
+      if (allMatchesData.length === 0) throw new Error('Nenhuma partida de Valorant encontrada desde o início do treino.');
       matchCount = allMatchesData.length;
     }
 
@@ -62,7 +62,6 @@ export async function execute(interaction: ButtonInteraction) {
         const participants = matchData.players.all_players;
         
         participants.forEach((participant: any) => {
-          // No Valorant, cruzamos os dados formatando o nome da API para ficar igual ao do Banco de Dados
           const partRiotId = `${participant.name}#${participant.tag}`.toLowerCase();
           const playerLinkado = dbPlayers.find(p => p.riot_id?.toLowerCase() === partRiotId);
           
@@ -119,17 +118,21 @@ export async function execute(interaction: ButtonInteraction) {
       .setColor(gameName === 'Valorant' ? '#ff4655' : '#2ecc71')
       .setDescription(`${winRatioText}\nForam registradas **${matchCount} partidas** neste ciclo.`)
       .addFields(
-        { name: 'KDA Médio Coletivo', value: `${(totalKills/matchCount).toFixed(1)} / ${(totalDeaths/matchCount).toFixed(1)} / ${(totalAssists/matchCount).toFixed(1)}` }
+        { name: 'KDA Médio Coletivo', value: `${(totalKills/matchCount || 0).toFixed(1)} / ${(totalDeaths/matchCount || 0).toFixed(1)} / ${(totalAssists/matchCount || 0).toFixed(1)}` }
       );
 
     await supabase.from('matches').insert(statsToSaveBatch);
     await message.edit({ embeds: [resultEmbed], components: [] });
 
   } catch (error: any) {
-    console.error(error);
+    console.error('--- ERRO DETALHADO NO END_MATCH ---');
+    console.error(error.message);
+    if (error.stack) console.error(error.stack);
+    console.error('-----------------------------------');
+
     const retryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId('end_match').setLabel('Tentar Novamente').setStyle(ButtonStyle.Danger)
     );
-    await message.edit({ content: `❌ Erro ao puxar a partida: ${error.message}`, components: [retryRow] });
+    await message.edit({ content: `❌ Erro detalhado: ${error.message}`, components: [retryRow] });
   }
 }

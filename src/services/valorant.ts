@@ -19,7 +19,10 @@ export async function getValorantMatchesSince(riotId: string, startTimeEpoch: nu
     const json = await response.json();
     if (!json.data) return [];
 
-    return json.data.filter((match: any) => match.metadata.game_start >= startTimeEpoch);
+    // Janela de segurança: Permite partidas jogadas até 2 horas antes do lobby ser aberto
+    const bufferTime = startTimeEpoch - 7200;
+
+    return json.data.filter((match: any) => match.metadata.game_start >= bufferTime);
   } catch (error) {
     console.error('Falha ao buscar partidas de Valorant:', error);
     return [];
